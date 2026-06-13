@@ -2,211 +2,115 @@ import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
 
-st.set_page_config(
-    page_title="Nodal Analysis Pro",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# إعدادات الصفحة المتقدمة
+st.set_page_config(page_title="Advanced Nodal Analysis Pro", layout="wide", initial_sidebar_state="expanded")
 
-# ── Minimal clean CSS ──────────────────────────────────────────
+# التصميم الخارجي والعناوين
+st.title("🛢️ Production Optimization Dashboard: Nodal Analysis")
 st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+This professional-grade tool performs **Nodal Analysis** by intersecting **Vogel's IPR** with a physical **Tubing Performance Relationship (TPR)** model to evaluate well deliverability.
+""")
 
-html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
-}
+# ----------------------------------------------------------------
+# 1. شريط المدخلات الجانبي (Professional Inputs)
+# ----------------------------------------------------------------
+st.sidebar.header("📋 Reservoir Parameters (IPR)")
+Pr = st.sidebar.number_input("Reservoir Pressure (Pr) [psi]", min_value=1000, max_value=8000, value=3500, step=100)
+Pwf_test = st.sidebar.number_input("Test Flowing Pressure (Pwf) [psi]", min_value=500, max_value=7500, value=2500, step=100)
+Q_test = st.sidebar.number_input("Test Flow Rate (Q) [STB/day]", min_value=100, max_value=5000, value=1200, step=50)
 
-#MainMenu, footer { visibility: hidden; }
+st.sidebar.header("📋 Wellbore & Tubing Parameters (TPR)")
+Depth = st.sidebar.number_input("True Vertical Depth (TVD) [ft]", min_value=2000, max_value=15000, value=8000, step=500)
+Pwh = st.sidebar.number_input("Wellhead Pressure (Pwh) [psi]", min_value=50, max_value=1500, value=300, step=50)
+fluid_grad = st.sidebar.slider("Fluid Pressure Gradient [psi/ft]", min_value=0.15, max_value=0.50, value=0.35, step=0.01, 
+                               help="Water: ~0.433 psi/ft, Light Oil: ~0.3-0.35 psi/ft")
+friction_coef = st.sidebar.slider("Tubing Friction Factor Coefficient", min_value=0.1, max_value=10.0, value=2.0, step=0.1,
+                                  help="Simulates restriction in tubing. Higher value = smaller tubing diameter.")
 
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background: #FAFAFA;
-    border-right: 1px solid #EFEFEF;
-}
-
-/* Metric cards: just a subtle shadow */
-[data-testid="metric-container"] {
-    background: #FFFFFF;
-    border: 1px solid #EFEFEF;
-    border-radius: 12px;
-    padding: 16px 20px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-}
-
-/* Metric label */
-[data-testid="metric-container"] label {
-    font-size: 12px !important;
-    color: #888 !important;
-    font-weight: 500 !important;
-}
-
-/* Metric value */
-[data-testid="metric-container"] [data-testid="metric-value"] {
-    font-size: 22px !important;
-    font-weight: 700 !important;
-    color: #1a1a1a !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ── SIDEBAR ────────────────────────────────────────────────────
-st.sidebar.title("⚙️ Parameters")
-
-st.sidebar.markdown("#### Reservoir (IPR)")
-Pr       = st.sidebar.number_input("Reservoir Pressure — Pr (psi)",     1000, 8000, 3500, 100)
-Pwf_test = st.sidebar.number_input("Test Flowing Pressure — Pwf (psi)", 500,  7500, 2500, 100)
-Q_test   = st.sidebar.number_input("Test Flow Rate — Q (STB/day)",      100,  5000, 1200, 50)
-
-st.sidebar.markdown("#### Wellbore (TPR)")
-Depth         = st.sidebar.number_input("TVD (ft)",                2000, 15000, 8000, 500)
-Pwh           = st.sidebar.number_input("Wellhead Pressure (psi)", 50,   1500,  300,  50)
-fluid_grad    = st.sidebar.slider("Fluid Gradient (psi/ft)",   0.15, 0.50, 0.35, 0.01,
-                                  help="Water ≈ 0.433 | Light oil ≈ 0.30–0.35")
-friction_coef = st.sidebar.slider("Tubing Friction Coefficient", 0.1, 10.0, 2.0, 0.1,
-                                  help="Higher = smaller tubing / more restriction")
-
-# ── HEADER ─────────────────────────────────────────────────────
-st.markdown("## 🛢️ Nodal Analysis Dashboard")
-st.markdown(
-    "<p style='color:#888; margin-top:-12px; font-size:14px;'>"
-    "Vogel IPR · Physical TPR · Operating Point</p>",
-    unsafe_allow_html=True
-)
-st.divider()
-
-# ── VALIDATION ─────────────────────────────────────────────────
+# ----------------------------------------------------------------
+# 2. الحسابات الهندسية النظيفة (Mathematical Processing)
+# ----------------------------------------------------------------
 if Pwf_test >= Pr:
-    st.error("❌ Test Pwf must be less than Reservoir Pressure (Pr).")
-    st.stop()
+    st.error("❌ Error: Test Pwf must be strictly less than Reservoir Pressure (Pr).")
+else:
+    # حساب أقصى إنتاجية نظرياً باستخدام Vogel
+    vogel_denom = 1 - 0.2 * (Pwf_test / Pr) - 0.8 * (Pwf_test / Pr)**2
+    Qmax = Q_test / vogel_denom if vogel_denom > 0 else 0
 
-# ── CALCULATIONS ───────────────────────────────────────────────
-vogel_denom = 1 - 0.2*(Pwf_test/Pr) - 0.8*(Pwf_test/Pr)**2
-Qmax = Q_test / vogel_denom if vogel_denom > 0 else 0
-PI   = Q_test / (Pr - Pwf_test)
+    if Qmax > 0:
+        # توليد مصفوفة معدلات الإنتاج لربط المنحنيين
+        q_arr = np.linspace(0, Qmax, 200)
+        
+        # حساب ضغط قاع البئر لكل معدل إنتاج في الـ IPR (حل المعادلة التربيعية لفوغل)
+        pwf_ipr = []
+        for q in q_arr:
+            radial_val = 0.04 + 3.2 * (1 - (q / Qmax))
+            x = (-0.2 + np.sqrt(radial_val)) / 1.6
+            pwf_ipr.append(x * Pr)
+        pwf_ipr = np.array(pwf_ipr)
+        
+        # حساب ضغط قاع البئر في الـ TPR باستخدام الوزن الهيدروستاتيكي + الفقد بالاحتكاك
+        # Pwf = Pwh + ΔP_hydrostatic + ΔP_friction
+        delta_p_hydrostatic = fluid_grad * Depth
+        pwf_tpr = Pwh + delta_p_hydrostatic + (friction_coef * 1e-6 * (q_arr ** 1.85))
+        
+        # العثور على نقطة التقاطع برمجياً (Operating Point)
+        diff = np.abs(pwf_ipr - pwf_tpr)
+        idx_intersection = np.argmin(diff)
+        
+        q_op = q_arr[idx_intersection]
+        pwf_op = pwf_ipr[idx_intersection]
+        
+        # التحقق من إمكانية التدفق الطبيعي
+        is_flowing = True
+        if pwf_tpr[0] > Pr or q_op <= 1.0:
+            is_flowing = False
+            q_op = 0.0
+            pwf_op = 0.0
 
-q_arr   = np.linspace(0, Qmax, 300)
-pwf_ipr = np.array([
-    ((-0.2 + np.sqrt(max(0.0, 0.04 + 3.2*(1 - q/Qmax)))) / 1.6) * Pr
-    for q in q_arr
-])
-delta_hyd = fluid_grad * Depth
-pwf_tpr   = Pwh + delta_hyd + (friction_coef * 1e-4 * (q_arr ** 1.85))
+        # ----------------------------------------------------------------
+        # 3. عرض النتائج ولوحة البيانات (Dashboard & Visuals)
+        # ----------------------------------------------------------------
+        st.subheader("📊 Well Performance Summary")
+        col1, col2, col3 = st.columns(3)
+        
+        if is_flowing:
+            col1.metric(label="⚡ Operating Flow Rate (Q_op)", value=f"{q_op:,.1f} STB/day")
+            col2.metric(label="📉 Operating Bottomhole Pressure (Pwf_op)", value=f"{pwf_op:,.1f} psi")
+            col3.metric(label="🏆 Maximum Potential (Qmax)", value=f"{Qmax:,.1f} STB/day")
+        else:
+            col1.metric(label="⚡ Operating Flow Rate (Q_op)", value="0.0 STB/day", delta="Well cannot flow naturally", delta_color="inverse")
+            col2.metric(label="📉 Operating Bottomhole Pressure (Pwf_op)", value="N/A")
+            col3.metric(label="🏆 Maximum Potential (Qmax)", value=f"{Qmax:,.1f} STB/day")
+            st.warning("⚠️ High backpressure or heavy fluid gradient detected. The static fluid column exceeds reservoir energy.")
 
-diff   = np.abs(pwf_ipr - pwf_tpr)
-idx_op = np.argmin(diff)
-q_op   = q_arr[idx_op]
-pwf_op = pwf_ipr[idx_op]
-
-is_flowing = not (pwf_tpr[0] > Pr or q_op <= 1.0)
-if not is_flowing:
-    q_op = pwf_op = 0.0
-
-efficiency   = round((q_op / Qmax) * 100, 1) if is_flowing else 0.0
-drawdown_pct = round((1 - pwf_op / Pr) * 100, 1) if is_flowing else 0.0
-
-# ── KPI METRICS ────────────────────────────────────────────────
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("⚡ Operating Rate (Q_op)",     f"{q_op:,.0f} STB/day")
-c2.metric("📉 Operating BHP (Pwf_op)",   f"{pwf_op:,.0f} psi")
-c3.metric("🏆 Maximum Rate (Qmax)",       f"{Qmax:,.0f} STB/day")
-c4.metric("📈 Productivity Index (PI)",   f"{PI:.3f} STB/d/psi")
-
-st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
-if not is_flowing:
-    st.warning("⚠️ Well cannot flow naturally — static fluid column exceeds reservoir energy. Consider artificial lift.")
-
-# ── ANIMATED CHART ─────────────────────────────────────────────
-n      = len(q_arr)
-steps  = 40
-
-frames = []
-for i in range(1, steps + 1):
-    end = max(2, int(n * i / steps))
-    fd  = [
-        go.Scatter(x=q_arr[:end], y=pwf_ipr[:end],
-                   mode="lines", line=dict(color="#4F8EF7", width=2.5)),
-        go.Scatter(x=q_arr[:end], y=pwf_tpr[:end],
-                   mode="lines", line=dict(color="#F76B6B", width=2.5)),
-    ]
-    if i == steps and is_flowing:
-        fd.append(go.Scatter(
-            x=[q_op], y=[pwf_op],
-            mode="markers+text",
-            marker=dict(color="#2DB37A", size=13, symbol="diamond",
-                        line=dict(width=2, color="white")),
-            text=[f"  ({q_op:.0f} STB/d,  {pwf_op:.0f} psi)"],
-            textposition="top right",
-            textfont=dict(size=12, color="#2DB37A")
-        ))
-    frames.append(go.Frame(data=fd, name=str(i)))
-
-fig = go.Figure(
-    data=[
-        go.Scatter(x=[], y=[], mode="lines",
-                   name="IPR — Inflow",
-                   line=dict(color="#4F8EF7", width=2.5),
-                   fill="tozeroy", fillcolor="rgba(79,142,247,0.07)"),
-        go.Scatter(x=[], y=[], mode="lines",
-                   name="TPR — Tubing",
-                   line=dict(color="#F76B6B", width=2.5),
-                   fill="tozeroy", fillcolor="rgba(247,107,107,0.06)"),
-        go.Scatter(x=[], y=[], mode="markers+text",
-                   name="Operating Point",
-                   marker=dict(color="#2DB37A", size=13, symbol="diamond",
-                               line=dict(width=2, color="white"))),
-    ],
-    frames=frames
-)
-
-fig.update_layout(
-    paper_bgcolor="white",
-    plot_bgcolor="white",
-    font=dict(family="Inter, sans-serif", size=12, color="#444"),
-    xaxis=dict(
-        title="Liquid Flow Rate (STB/day)",
-        gridcolor="#F0F0F0",
-        zeroline=False,
-        rangemode="tozero",
-    ),
-    yaxis=dict(
-        title="Bottomhole Flowing Pressure, Pwf (psi)",
-        gridcolor="#F0F0F0",
-        zeroline=False,
-        range=[0, Pr * 1.05],
-    ),
-    legend=dict(
-        orientation="h",
-        yanchor="bottom", y=1.02,
-        xanchor="left",  x=0,
-        font=dict(size=12),
-        bgcolor="rgba(255,255,255,0)",
-    ),
-    hovermode="x unified",
-    margin=dict(l=60, r=20, t=50, b=50),
-    updatemenus=[dict(
-        type="buttons",
-        showactive=False,
-        x=1.0, y=1.12, xanchor="right",
-        buttons=[dict(
-            label="▶  Play Animation",
-            method="animate",
-            args=[None, dict(
-                frame=dict(duration=35, redraw=True),
-                fromcurrent=False,
-                transition=dict(duration=0)
-            )]
-        )]
-    )]
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-# ── BOTTOM INFO ROW ────────────────────────────────────────────
-st.divider()
-b1, b2, b3, b4 = st.columns(4)
-b1.markdown(f"**Drawdown** &nbsp; `{drawdown_pct}%`")
-b2.markdown(f"**Efficiency vs Qmax** &nbsp; `{efficiency}%`")
-b3.markdown(f"**Hydrostatic ΔP** &nbsp; `{delta_hyd:,.0f} psi`")
-b4.markdown(f"**Well Status** &nbsp; {'✅ Flowing' if is_flowing else '🔴 No natural flow'}")
+        # الرسم البياني المتقدم باستخدام Plotly
+        fig = go.Figure()
+        
+        # منحنى IPR
+        fig.add_trace(go.Scatter(x=q_arr, y=pwf_ipr, mode='lines', name='Inflow Performance (IPR)',
+                                 line=dict(color='#1f77b4', width=3.5)))
+        # منحنى TPR
+        fig.add_trace(go.Scatter(x=q_arr, y=pwf_tpr, mode='lines', name='Tubing Performance (TPR)',
+                                 line=dict(color='#d62728', width=3.5)))
+        
+        # إضافة نقطة التشغيل الفورية للمخطط
+        if is_flowing:
+            fig.add_trace(go.Scatter(x=[q_op], y=[pwf_op], mode='markers+text', name='Operating Point',
+                                     marker=dict(color='#2ca02c', size=14, symbol='diamond', line=dict(width=2, color='Black')),
+                                     text=[f"  ({q_op:.0f} STB/d, {pwf_op:.0f} psi)"], textposition="top right",
+                                     textfont=dict(family="sans serif", size=14, color="#2ca02c")))
+        
+        # تنسيق اللوحة البيانية (تم تصحيح محور السينات هنا)
+        fig.update_layout(
+            title="<b>Nodal Analysis Plot (Vogel IPR vs. Physical TPR)</b>",
+            xaxis_title="Liquid Flow Rate (STB/day)",
+            yaxis_title="Bottomhole Flowing Pressure, Pwf (psi)",
+            xaxis=dict(gridcolor='rgba(200,200,200,0.3)', rangemode='tozero'),
+            yaxis=dict(gridcolor='rgba(200,200,200,0.3)', range=[0, Pr*1.05]),
+            hovermode="x unified",
+            template="plotly_white",
+            legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99)
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
