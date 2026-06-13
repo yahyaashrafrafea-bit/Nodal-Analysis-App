@@ -7,7 +7,7 @@ import base64
 st.set_page_config(page_title="Advanced Nodal Analysis Pro", layout="wide", initial_sidebar_state="expanded")
 
 # ----------------------------------------------------------------
-# --- إضافة صورة الغلاف العلوية مع تأثير التلاشي + تحسينات المربعات ---
+# --- إضافة صورة الغلاف بتأثير التلاشي الداكن الاحترافي ---
 # ----------------------------------------------------------------
 @st.cache_data
 def get_base64_of_bin_file(bin_file):
@@ -16,17 +16,17 @@ def get_base64_of_bin_file(bin_file):
     return base64.b64encode(data).decode()
 
 try:
-    # تحويل الصورة إلى نص برمجي لدمجها كخلفية
+    # تحويل الصورة إلى نص برمجي
     img_base64 = get_base64_of_bin_file("c62c32fd813457de68c38c156d74dda6.jpg")
     
-    # دمج كود CSS لتأثير التلاشي مع التحسين البصري للمربعات
+    # دمج الصورة مع تدرج داكن (Linear Gradient) يطابق خلفية ستريم ليت
     custom_css = f"""
     <style>
-        /* إعدادات صورة الغلاف */
         .banner-container {{
             width: 100vw;
-            height: 400px;
-            background-image: url('data:image/jpeg;base64,{img_base64}');
+            height: 350px;
+            /* السر هنا: وضع طبقة داكنة فوق الصورة تتلاشى للأسود بالتدريج */
+            background-image: linear-gradient(to bottom, rgba(14,17,23,0.3) 0%, rgba(14,17,23,1) 90%), url('data:image/jpeg;base64,{img_base64}');
             background-size: cover;
             background-position: center 30%;
             background-repeat: no-repeat;
@@ -34,40 +34,37 @@ try:
             top: 0;
             left: 0;
             z-index: 0;
-            /* تأثير التلاشي (Mask Gradient) */
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%);
-            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%);
-            opacity: 0.85;
         }}
-        /* دفع المحتوى للأسفل ليتداخل بشكل جميل مع الصورة */
+        
+        /* دفع المحتوى للأسفل وإبقائه فوق الخلفية */
         .block-container {{
-            margin-top: 100px !important;
+            margin-top: 50px !important;
+            padding-top: 2rem !important;
             z-index: 1;
             position: relative;
         }}
-        /* التحسين البصري الخاص بك لمربعات النتائج */
+
+        /* إضافة ظل خفيف للنصوص لتبرز أكثر */
+        h1, h2, h3, p {{
+            text-shadow: 1px 1px 4px rgba(0,0,0,0.8);
+        }}
+
+        /* تصميم مربعات النتائج لتناسب الوضع الداكن (Dark Theme) */
         [data-testid="metric-container"] {{
-            background: #ffffff;
-            border: 1px solid #e8e8e8;
-            border-radius: 10px;
-            padding: 14px 18px;
+            background: rgba(30, 33, 40, 0.6); /* لون داكن شبه شفاف */
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            backdrop-filter: blur(5px);
         }}
     </style>
     <div class="banner-container"></div>
     """
     st.markdown(custom_css, unsafe_allow_html=True)
 except FileNotFoundError:
-    # في حال عدم العثور على الصورة، يتم تطبيق تحسينات المربعات فقط
-    st.markdown("""
-    <style>
-    [data-testid="metric-container"] {
-        background: #ffffff;
-        border: 1px solid #e8e8e8;
-        border-radius: 10px;
-        padding: 14px 18px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    # في حال عدم وجود الصورة
+    pass
 
 # ----------------------------------------------------------------
 # العناوين الرئيسية
@@ -115,7 +112,7 @@ else:
             pwf_ipr.append(x * Pr)
         pwf_ipr = np.array(pwf_ipr)
 
-        # TPR curve  ← FIX: 1e-4 بدل 1e-6 لتأثير احتكاك واقعي
+        # TPR curve 
         delta_p_hydrostatic = fluid_grad * Depth
         pwf_tpr = Pwh + delta_p_hydrostatic + (friction_coef * 1e-4 * (q_arr ** 1.85))
 
@@ -186,12 +183,14 @@ else:
             title="<b>Nodal Analysis Plot — Vogel IPR vs. Physical TPR</b>",
             xaxis_title="Liquid Flow Rate (STB/day)",
             yaxis_title="Bottomhole Flowing Pressure, Pwf (psi)",
-            xaxis=dict(gridcolor='rgba(200,200,200,0.35)', rangemode='tozero'),
-            yaxis=dict(gridcolor='rgba(200,200,200,0.35)', range=[0, Pr * 1.05]),
+            xaxis=dict(gridcolor='rgba(200,200,200,0.1)', rangemode='tozero'),
+            yaxis=dict(gridcolor='rgba(200,200,200,0.1)', range=[0, Pr * 1.05]),
             hovermode="x unified",
-            template="plotly_white",
+            template="plotly_dark", # تغيير الثيم ليتناسب مع الخلفية الداكنة
             legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99),
-            margin=dict(l=60, r=20, t=60, b=50)
+            margin=dict(l=60, r=20, t=60, b=50),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
         )
 
         st.plotly_chart(fig, use_container_width=True)
