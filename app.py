@@ -1,21 +1,77 @@
 import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
+import base64
 
+# إعدادات الصفحة المتقدمة
 st.set_page_config(page_title="Advanced Nodal Analysis Pro", layout="wide", initial_sidebar_state="expanded")
 
-# تحسين بصري بسيط
-st.markdown("""
-<style>
-[data-testid="metric-container"] {
-    background: #ffffff;
-    border: 1px solid #e8e8e8;
-    border-radius: 10px;
-    padding: 14px 18px;
-}
-</style>
-""", unsafe_allow_html=True)
+# ----------------------------------------------------------------
+# --- إضافة صورة الغلاف العلوية مع تأثير التلاشي + تحسينات المربعات ---
+# ----------------------------------------------------------------
+@st.cache_data
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
 
+try:
+    # تحويل الصورة إلى نص برمجي لدمجها كخلفية
+    img_base64 = get_base64_of_bin_file("c62c32fd813457de68c38c156d74dda6.jpg")
+    
+    # دمج كود CSS لتأثير التلاشي مع التحسين البصري للمربعات
+    custom_css = f"""
+    <style>
+        /* إعدادات صورة الغلاف */
+        .banner-container {{
+            width: 100vw;
+            height: 400px;
+            background-image: url('data:image/jpeg;base64,{img_base64}');
+            background-size: cover;
+            background-position: center 30%;
+            background-repeat: no-repeat;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+            /* تأثير التلاشي (Mask Gradient) */
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%);
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%);
+            opacity: 0.85;
+        }}
+        /* دفع المحتوى للأسفل ليتداخل بشكل جميل مع الصورة */
+        .block-container {{
+            margin-top: 100px !important;
+            z-index: 1;
+            position: relative;
+        }}
+        /* التحسين البصري الخاص بك لمربعات النتائج */
+        [data-testid="metric-container"] {{
+            background: #ffffff;
+            border: 1px solid #e8e8e8;
+            border-radius: 10px;
+            padding: 14px 18px;
+        }}
+    </style>
+    <div class="banner-container"></div>
+    """
+    st.markdown(custom_css, unsafe_allow_html=True)
+except FileNotFoundError:
+    # في حال عدم العثور على الصورة، يتم تطبيق تحسينات المربعات فقط
+    st.markdown("""
+    <style>
+    [data-testid="metric-container"] {
+        background: #ffffff;
+        border: 1px solid #e8e8e8;
+        border-radius: 10px;
+        padding: 14px 18px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# ----------------------------------------------------------------
+# العناوين الرئيسية
+# ----------------------------------------------------------------
 st.title("🛢️ Production Optimization Dashboard: Nodal Analysis")
 st.markdown("This tool performs **Nodal Analysis** by intersecting **Vogel's IPR** with a **Tubing Performance Relationship (TPR)** to find the well operating point.")
 
